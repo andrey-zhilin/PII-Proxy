@@ -2,8 +2,8 @@
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim AS builder
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends git ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+      && apt-get install -y --no-install-recommends git ca-certificates \
+      && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /build
 
@@ -20,10 +20,10 @@ RUN git clone --depth=1 \
 
 RUN git clone --depth=1 --no-checkout \
       https://github.com/googleapis/googleapis /build/.proto-cache/googleapis \
-    && cd /build/.proto-cache/googleapis \
-    && git sparse-checkout init --cone \
-    && git sparse-checkout set google/rpc google/api \
-    && git checkout
+      && cd /build/.proto-cache/googleapis \
+      && git sparse-checkout init --cone \
+      && git sparse-checkout set google/rpc google/api \
+      && git checkout
 
 RUN git clone --depth=1 \
       https://github.com/cncf/xds /build/.proto-cache/xds
@@ -38,7 +38,7 @@ RUN PROTO_CACHE=/build/.proto-cache bash scripts/gen_protos.sh
 # Stage 2: lean runtime image
 FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
-WORKDIR /app
+WORKDIR /srv/ext_proc
 
 # Install only runtime deps (skip the build group with grpcio-tools)
 COPY pyproject.toml .
@@ -46,7 +46,9 @@ RUN uv sync --no-group build
 
 # Copy compiled proto stubs and application code
 COPY --from=builder /build/generated ./generated
-COPY app.py .
+COPY __init__.py app.py .
+
+ENV PYTHONPATH=/srv:/srv/ext_proc/generated
 
 EXPOSE 50051
 CMD ["uv", "run", "python", "app.py"]

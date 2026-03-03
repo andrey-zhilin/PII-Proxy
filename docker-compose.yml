@@ -17,6 +17,6 @@ services:
       - "8081:80"
 
   ext-proc:
-    build: ./ext-proc
+    build: ./ext_proc
     ports:
       - "50051:50051"
