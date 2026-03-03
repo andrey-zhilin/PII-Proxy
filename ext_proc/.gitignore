@@ -1,0 +1,6 @@
+.proto-cache/
+generated/
+.venv/
+__pycache__/
+*.pyc
+*.pyo

@@ -20,10 +20,39 @@ static_resources:
                           route:
                             cluster: downstream_service
                 http_filters:
+                  - name: envoy.filters.http.ext_proc
+                    typed_config:
+                      "@type": type.googleapis.com/envoy.extensions.filters.http.ext_proc.v3.ExternalProcessor
+                      grpc_service:
+                        envoy_grpc:
+                          cluster_name: ext_proc_cluster
+                      failure_mode_allow: false
+                      processing_mode:
+                        # Skip headers – we only care about the response body
+                        request_header_mode: SKIP
+                        response_header_mode: SKIP
+                        request_body_mode: NONE
+                        response_body_mode: BUFFERED
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
+    - name: ext_proc_cluster
+      connect_timeout: 0.25s
+      type: LOGICAL_DNS
+      lb_policy: ROUND_ROBIN
+      typed_extension_protocol_options:
+        envoy.extensions.upstreams.http.v3.HttpProtocolOptions:
+          "@type": type.googleapis.com/envoy.extensions.upstreams.http.v3.HttpProtocolOptions
+          explicit_http_config:
+            http2_protocol_options: {}  # gRPC requires HTTP/2
+      load_assignment:
+        cluster_name: ext_proc_cluster
+        endpoints:
+          - lb_endpoints:
+              - endpoint:
+                  address:
+                    socket_address: { address: ext-proc, port_value: 50051 }
     - name: downstream_service
       connect_timeout: 0.25s
       type: LOGICAL_DNS

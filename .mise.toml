@@ -1,0 +1,27 @@
+[tools]
+python = "3.12.12"
+uv = "latest"
+
+# ── Tasks ──────────────────────────────────────────────────────────────────────
+
+[tasks.install]
+description = "Install Python dependencies (including grpcio-tools for proto generation)"
+dir = "ext_proc"
+run = "uv sync --group build"
+
+[tasks.gen-protos]
+description = "Clone Envoy proto sources and compile Python gRPC stubs into ./generated/"
+dir = "ext_proc"
+depends = ["install"]
+run = "bash scripts/gen_protos.sh"
+
+[tasks.run]
+description = "Run the ext-proc gRPC server (requires protos already generated)"
+dir = "ext_proc"
+run = "PYTHONPATH=..:generated uv run python app.py"
+
+[tasks.dev]
+description = "Generate protos then start the server (full local setup in one command)"
+dir = "ext_proc"
+depends = ["gen-protos"]
+run = "PYTHONPATH=..:generated uv run python app.py"

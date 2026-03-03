@@ -1,0 +1,16 @@
+[project]
+name = "ext-proc"
+version = "0.1.0"
+description = "Envoy ext_proc gRPC service – appends text to response bodies"
+requires-python = ">=3.12"
+dependencies = [
+    "grpcio>=1.62.0",
+    "protobuf>=4.25.0",
+    # Pre-built stubs for google.rpc.*, google.api.* (imported by envoy protos)
+    "googleapis-common-protos>=1.62.0",
+]
+
+[dependency-groups]
+build = [
+    "grpcio-tools>=1.62.0",
+]

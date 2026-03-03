@@ -2,15 +2,21 @@ version: '3.9'
 
 services:
   envoy:
-    image: envoyproxy/envoy:v1.27.0
+    image: envoyproxy/envoy:v1.33.0
     volumes:
       - ./envoy.yaml:/etc/envoy/envoy.yaml
     ports:
       - "8080:8080"
     depends_on:
       - dummy-server
+      - ext-proc
 
   dummy-server:
     build: ./dummy-server
     ports:
       - "8081:80"
+
+  ext-proc:
+    build: ./ext-proc
+    ports:
+      - "50051:50051"
