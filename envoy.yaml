@@ -18,20 +18,20 @@ static_resources:
                       routes:
                         - match: { prefix: "/" }
                           route:
-                            cluster: nginx_service
+                            cluster: downstream_service
                 http_filters:
                   - name: envoy.filters.http.router
                     typed_config:
                       "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
   clusters:
-    - name: nginx_service
+    - name: downstream_service
       connect_timeout: 0.25s
       type: LOGICAL_DNS
       lb_policy: ROUND_ROBIN
       load_assignment:
-        cluster_name: nginx_service
+        cluster_name: downstream_service
         endpoints:
           - lb_endpoints:
               - endpoint:
                   address:
-                    socket_address: { address: nginx, port_value: 80 }
+                    socket_address: { address: dummy-server, port_value: 80 }

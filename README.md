@@ -25,8 +25,14 @@ Stage 3: LLM "Hard-Case" Pass
   │    └─ Cases where meaning/context matters more than format
   └─ Higher computational cost but better privacy–utility trade-off
 
-
 # Architecture
 
-
 Envoy -> envoy.filters.http.ext_processor -> PII Proxy (gRPC) -> Stage 1 (Regex/Rules) -> Stage 2 (NER) -> Stage 3 (LLM) -> Response to Envoy
+
+# CLI
+
+```
+
+curl -v -X POST -d "Hello, direct downstream!" http://localhost:8081/
+
+```
