@@ -15,6 +15,7 @@ from ext_proc.generated.envoy.service.ext_proc.v3 import (
 from ext_proc.generated.envoy.extensions.filters.http.ext_proc.v3 import (
     processing_mode_pb2,
 )  # noqa: F401
+from ext_proc.scrubber import PiiScrubber
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,7 +23,8 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-APPEND_TEXT = b" DUMMY TEXT"
+# Initialise once at startup – loading the spaCy model is expensive.
+_scrubber = PiiScrubber()
 
 
 class ExtProcService(external_processor_pb2_grpc.ExternalProcessorServicer):
@@ -30,18 +32,30 @@ class ExtProcService(external_processor_pb2_grpc.ExternalProcessorServicer):
         """Bidirectional stream handler.
 
         Envoy sends ProcessingRequest messages; we must reply with a
-        ProcessingResponse for each one.  We only touch response bodies –
-        everything else is passed through with an empty (allow-continue) reply.
+        ProcessingResponse for each one.  We capture the response Content-Type
+        from response_headers so we can route JSON vs plain-text correctly, then
+        scrub PII from every response body.
         """
+        content_type = ""
+
         for req in request_iterator:
             msg_type = req.WhichOneof("request")
             log.info("Received request type: %s", msg_type)
 
-            if msg_type == "response_body":
+            if msg_type == "response_headers":
+                # Capture Content-Type for body scrubbing decisions.
+                for header in req.response_headers.headers.headers:
+                    if header.key.lower() == "content-type":
+                        content_type = header.value
+                        break
+                # Pass headers through unchanged.
+                yield external_processor_pb2.ProcessingResponse()
+
+            elif msg_type == "response_body":
                 original_body = req.response_body.body
-                modified_body = original_body + APPEND_TEXT
+                modified_body = _scrubber.scrub_bytes(original_body, content_type)
                 log.info(
-                    "Modifying response body: %d -> %d bytes",
+                    "Scrubbed response body: %d -> %d bytes",
                     len(original_body),
                     len(modified_body),
                 )

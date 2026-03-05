@@ -1,16 +1,26 @@
 [project]
 name = "ext-proc"
 version = "0.1.0"
-description = "Envoy ext_proc gRPC service – appends text to response bodies"
+description = "Envoy ext_proc gRPC service – scrubs PII from response bodies"
 requires-python = ">=3.12"
 dependencies = [
     "grpcio>=1.62.0",
     "protobuf>=4.25.0",
     # Pre-built stubs for google.rpc.*, google.api.* (imported by envoy protos)
     "googleapis-common-protos>=1.62.0",
+    # PII detection / anonymisation
+    "presidio-analyzer>=2.2.355",
+    "presidio-anonymizer>=2.2.355",
+    "presidio-structured>=0.0.4",
+    "spacy>=3.7.0",
+    "en-core-web-lg @ https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl",
 ]
 
 [dependency-groups]
 build = [
     "grpcio-tools>=1.62.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
 ]

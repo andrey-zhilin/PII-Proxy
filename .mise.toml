@@ -25,3 +25,8 @@ description = "Generate protos then start the server (full local setup in one co
 dir = "ext_proc"
 depends = ["gen-protos"]
 run = "PYTHONPATH=..:generated uv run python app.py"
+
+[tasks.test]
+description = "Run the test-suite for the ext_proc scrubber"
+dir = "ext_proc"
+run = "PYTHONPATH=..:generated uv run pytest tests/ -v"

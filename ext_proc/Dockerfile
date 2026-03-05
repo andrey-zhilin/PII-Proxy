@@ -40,13 +40,16 @@ FROM ghcr.io/astral-sh/uv:python3.12-bookworm-slim
 
 WORKDIR /srv/ext_proc
 
-# Install only runtime deps (skip the build group with grpcio-tools)
-COPY pyproject.toml .
-RUN uv sync --no-group build
+# Install only runtime deps (skip the build group with grpcio-tools).
+# The spaCy model (en_core_web_lg by default) is declared as a direct URL
+# dependency in pyproject.toml and will be installed by uv sync automatically.
+COPY pyproject.toml uv.lock* .
+RUN uv sync --no-group build --frozen
 
 # Copy compiled proto stubs and application code
 COPY --from=builder /build/generated ./generated
 COPY __init__.py app.py .
+COPY scrubber/ scrubber/
 
 ENV PYTHONPATH=/srv:/srv/ext_proc/generated
 
