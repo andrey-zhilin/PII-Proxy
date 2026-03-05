@@ -1,104 +1,112 @@
 # PII Proxy
 
-An Envoy-based reverse proxy that intercepts HTTP traffic and scrubs Personally Identifiable Information (PII) from response bodies before they reach the client.
+> **⚠️ Prototype** — This is an early-stage proof of concept. It is not production-ready and has not been audited for security or performance.
 
-## Architecture
+---
+
+## What is this?
+
+Every time an API responds with user data, there's a chance PII slips through — names, emails, phone numbers, credit card numbers. **PII Proxy** sits in front of your upstream service and automatically strips that data before it reaches the client, with zero changes to your application code.
+
+It works by running all traffic through **Envoy**, which buffers each response body and hands it off via gRPC to a Python sidecar. The sidecar uses [Microsoft Presidio](https://github.com/microsoft/presidio) (backed by a spaCy NER model) to detect and redact PII, then returns the cleaned body to Envoy, which forwards it to the client.
 
 ```
 Client
-  |
-  v
-Envoy :8080
-  |  envoy.filters.http.ext_proc (BUFFERED response body)
-  |  <--------------------------------------->
-  |                                        ext_proc gRPC service :50051
-  |                                          |
-  |                                          +- Stage 1: Regex / Rules
-  |                                          +- Stage 2: NER model
-  |                                          +- Stage 3: LLM (hard cases)
-  |
-  v
-Upstream (dummy-server :8081)
+  │
+  ▼
+Envoy :8080  ──── ext_proc (gRPC) ────▶  ext_proc service :50051
+  │                                           │
+  │                                           └─ Presidio + spaCy NER
+  │                                               detects & redacts PII
+  ▼
+Upstream service :8081
 ```
 
-### Components
+Both **plain-text** and **JSON** response bodies are supported — JSON fields are walked recursively and each string value is scrubbed individually.
 
-| Service       | Port  | Description                                              |
-|---------------|-------|----------------------------------------------------------|
-| `envoy`       | 8080  | Entry point — all traffic flows through here             |
-| `dummy-server`| 8081  | Upstream echo server (simulates a real backend)          |
-| `ext_proc`    | 50051 | Python gRPC ext_proc service — scrubs PII from responses |
+---
 
-## Running the project
-
-### Option A — Docker Compose (recommended)
+## Quick start
 
 Requires: `docker`, `docker compose`
 
 ```bash
-# Build and start all services
+git clone https://github.com/your-username/PII_proxy.git
+cd PII_proxy
 docker compose up --build
+```
 
-# Detached (background)
-docker compose up -d --build
+The first build downloads the spaCy `en_core_web_lg` model (~750 MB), so it takes a few minutes. Subsequent starts are fast.
 
-# Stop and remove containers
+```bash
+# Stop
 docker compose down
 ```
 
-### Option B — Local development with mise
-
-Requires: [`mise`](https://mise.jdx.dev), `git`
-
-```bash
-# Install mise (if not already installed)
-curl -sSf https://mise.run | sh
-echo 'eval "$(mise activate bash)"' >> ~/.bashrc
-source ~/.bashrc
-
-# From the project root — first time setup:
-# installs Python + uv, compiles proto stubs, then starts the server
-mise run dev
-
 ---
 
-## Testing with curl
+## Try it out
 
-All requests go through Envoy on **port 8080**. The dummy-server echoes the request
-body back as the response body — the ext_proc filter then processes that body.
+The dummy upstream server simply echoes back whatever body you send. Run these after `docker compose up` to see PII scrubbing live.
 
-**Basic echo test:**
+**No PII — passes through unchanged:**
 
 ```bash
-curl -X POST -d "Hello, downstream!" http://localhost:8080/
+curl -X POST -d "Hello, world!" http://localhost:8080/
+# → Hello, world!
 ```
 
-**Test PII scrubbing — email address:**
+**Email address:**
 
 ```bash
 curl -X POST \
   -d "Please contact john.doe@example.com for support" \
   http://localhost:8080/
+# → Please contact <EMAIL_ADDRESS> for support
 ```
 
-**Test PII scrubbing — phone and credit card:**
+**Phone number:**
 
 ```bash
 curl -X POST \
-  -d "Call +1-800-555-0199 or pay with card 4111 1111 1111 1111" \
+  -d "Call us at +1-800-555-0199 any time" \
   http://localhost:8080/
+# → Call us at <PHONE_NUMBER> any time
 ```
 
-**Verbose (shows headers and full exchange):**
+**Credit card number:**
 
 ```bash
-curl -v -X POST -d "SSN: 123-45-6789" http://localhost:8080/
+curl -X POST \
+  -d "Charge card 4111 1111 1111 1111 for the order" \
+  http://localhost:8080/
+# → Charge card <CREDIT_CARD> for the order
 ```
 
-**Direct upstream — bypasses Envoy and the scrubber:**
+**Multiple PII types in one request:**
 
 ```bash
-curl -X POST -d "Hello, direct downstream!" http://localhost:8081/
+curl -X POST \
+  -d "Contact Jane Smith at jane@acme.com or +44 20 7946 0958" \
+  http://localhost:8080/
+# → Contact <PERSON> at <EMAIL_ADDRESS> or <PHONE_NUMBER>
+```
+
+**JSON body — each field scrubbed individually:**
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Alice Brown","email":"alice@example.com"}' \
+  http://localhost:8080/
+# → {"name":"<PERSON>","email":"<EMAIL_ADDRESS>"}
+```
+
+**Bypass Envoy — hit the upstream directly (no scrubbing):**
+
+```bash
+curl -X POST -d "john.doe@example.com" http://localhost:8081/
+# → john.doe@example.com  (raw, unredacted)
 ```
 
 ---
@@ -107,9 +115,9 @@ curl -X POST -d "Hello, direct downstream!" http://localhost:8081/
 
 ```
 .
-|-- docker-compose.yml        # Orchestrates envoy + dummy-server + ext_proc
-|-- envoy.yaml                # Envoy config with ext_proc filter (response body BUFFERED)
-|-- .mise.toml                # mise tasks: install / gen-protos / run / dev
-|-- dummy-server/             # Minimal Flask echo server (upstream backend)
-+-- ext_proc/                 # Python gRPC ext_proc service
+├── docker-compose.yml    # Orchestrates envoy + dummy-server + ext_proc
+├── envoy.yaml            # Envoy config — ext_proc filter with BUFFERED response body
+├── dummy-server/         # Minimal Flask echo server (stand-in for a real upstream)
+└── ext_proc/ # gRPC ExternalProcessor service (Envoy ext_proc protocol with Presidio integration)
+
 ```
