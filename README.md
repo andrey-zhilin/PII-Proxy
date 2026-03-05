@@ -12,12 +12,12 @@ It works by running all traffic through **Envoy**, which buffers each response b
 
 ```mermaid
 flowchart LR
-    A(["👤 You"]) -->|"1 · send request"| B
-    B["🛡️ PII Proxy\n(Envoy)"] -->|"2 · forward"| C(["🖥️ Your App"])
-    C -->|"3 · raw response\n(may contain PII)"| B
+    A(["👤 You"]) -->|"1 · GET /users/42"| B
+    B["🛡️ PII Proxy"] -->|"2 · GET /users/42"| C(["🖥️ Your App"])
+    C -->|"3 · John Doe, john@acme.com +1-800-555-0199"| B
     B -->|"4 · response body"| D
-    D["🔍 PII Scrubber\n(Presidio + spaCy)"] -->|"5 · names, emails,\nphones → redacted"| B
-    B -->|"6 · safe response ✅"| A
+    D["🔍 PII Redactor"] -->|"5 · ⚠️ → ✅"| B
+    B -->|"6 · &lt;PERSON&gt;, &lt;EMAIL&gt; &lt;PHONE_NUMBER&gt; ✅"| A
 ```
 
 Both **plain-text** and **JSON** response bodies are supported — JSON fields are walked recursively and each string value is scrubbed individually.
