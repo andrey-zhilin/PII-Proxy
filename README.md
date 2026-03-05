@@ -10,16 +10,15 @@ Every time an API responds with user data, there's a chance PII slips through �
 
 It works by running all traffic through **Envoy**, which buffers each response body and hands it off via gRPC to a Python sidecar. The sidecar uses [Microsoft Presidio](https://github.com/microsoft/presidio) (backed by a spaCy NER model) to detect and redact PII, then returns the cleaned body to Envoy, which forwards it to the client.
 
-```
-Client
-  │
-  ▼
-Envoy :8080  ──── ext_proc (gRPC) ────▶  ext_proc service :50051
-  │                                           │
-  │                                           └─ Presidio + spaCy NER
-  │                                               detects & redacts PII
-  ▼
-Upstream service :8081
+```mermaid
+flowchart LR
+    Client -->|request| Envoy
+    Envoy -->|forward| Upstream
+    Upstream -->|response| Envoy
+    Envoy <-->|inspect & redact| Scrubber
+    Envoy -->|clean response| Client
+
+    Scrubber["PII Scrubber\n(Presidio + spaCy NER)"]
 ```
 
 Both **plain-text** and **JSON** response bodies are supported — JSON fields are walked recursively and each string value is scrubbed individually.
