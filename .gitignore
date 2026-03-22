@@ -1,0 +1,25 @@
+# Universal
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
+*.log
+
+# Python (root level)
+__pycache__/
+*.pyc
+*.pyo
+
+# Helm
+*.tgz
+.helm/
+
+# Environment / secrets
+.env
+.env.*
+*.secret.yaml
+secrets/
+
+# Editor
+.vscode/
+.idea/

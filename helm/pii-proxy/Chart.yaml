@@ -1,0 +1,19 @@
+apiVersion: v2
+name: pii-proxy
+description: >
+  Deploys the PII Proxy stack — an Envoy reverse proxy paired with an ext_proc
+  PII-scrubbing sidecar. All HTTP response bodies passing through Envoy are
+  automatically scanned and redacted by a Presidio/spaCy NLP pipeline before
+  they reach the client.
+type: application
+version: 0.1.0
+appVersion: "v1.33.0"
+keywords:
+  - pii
+  - privacy
+  - envoy
+  - ext_proc
+  - presidio
+home: ""
+sources: []
+maintainers: []

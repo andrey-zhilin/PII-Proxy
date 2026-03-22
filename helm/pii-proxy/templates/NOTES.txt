@@ -1,0 +1,39 @@
+PII Proxy deployed successfully!
+
+=== Access the proxy ===
+
+Forward the Service port to your local machine:
+
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "pii-proxy.fullname" . }} 8080:{{ .Values.service.port }}
+
+Then send a test request:
+
+  curl -X POST http://localhost:8080/ \
+    -H "Content-Type: text/plain" \
+    -d "My name is Jane Smith and her email is jane@example.com"
+
+Expected: PII replaced with <PERSON> and <EMAIL_ADDRESS> tokens.
+
+=== Startup note ===
+
+The ext_proc sidecar loads the spaCy NER model at startup — this takes 2-3 minutes.
+The pod will remain NotReady until the model finishes loading. This is expected.
+
+Wait for readiness:
+  kubectl -n {{ .Release.Namespace }} rollout status deployment/{{ include "pii-proxy.fullname" . }} --timeout=600s
+
+=== Run end-to-end test ===
+
+  helm test {{ .Release.Name }} --namespace {{ .Release.Namespace }}
+
+=== minikube users ===
+
+If you loaded images via `minikube image load`, ensure imagePullPolicy is set to Never:
+  helm upgrade {{ .Release.Name }} helm/pii-proxy -f my-values.yaml --set image.pullPolicy=Never
+
+=== Configuration ===
+
+Edit your values file and re-apply to change upstream, scaling, or resources:
+  helm upgrade --install {{ .Release.Name }} helm/pii-proxy -f my-values.yaml
+
+See helm/pii-proxy/README.md for full documentation.
