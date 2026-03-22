@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "pii-proxy.fullname" . }}
+  labels:
+    {{- include "pii-proxy.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "pii-proxy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "pii-proxy.selectorLabels" . | nindent 8 }}
+    spec:
+      volumes:
+        - name: envoy-config
+          configMap:
+            name: {{ include "pii-proxy.fullname" . }}-envoy-config
+
+      containers:
+        # ── Envoy reverse proxy ──────────────────────────────────
+        - name: envoy
+          image: "{{ .Values.image.envoy.repository }}:{{ .Values.image.envoy.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.envoy.listenPort }}
+              protocol: TCP
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy/envoy.yaml
+              subPath: envoy.yaml
+              readOnly: true
+          resources:
+            requests:
+              cpu: {{ .Values.resources.envoy.requests.cpu | quote }}
+              memory: {{ .Values.resources.envoy.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.envoy.limits.cpu | quote }}
+              memory: {{ .Values.resources.envoy.limits.memory | quote }}
+
+        # ── ext_proc PII-scrubbing sidecar ───────────────────────
+        # gRPC port (extProc.grpcPort) is pod-local only — no K8s Service exposes it.
+        - name: ext-proc
+          image: "{{ required "image.extProc.repository is required. Set it to your OCI registry image reference." .Values.image.extProc.repository }}:{{ .Values.image.extProc.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.extProc.grpcPort }}
+              protocol: TCP
+          env:
+            - name: GRPC_PORT
+              value: {{ .Values.extProc.grpcPort | quote }}
+            - name: SPACY_MODEL
+              value: {{ .Values.extProc.spacyModel | quote }}
+          resources:
+            requests:
+              cpu: {{ .Values.resources.extProc.requests.cpu | quote }}
+              memory: {{ .Values.resources.extProc.requests.memory | quote }}
+            limits:
+              cpu: {{ .Values.resources.extProc.limits.cpu | quote }}
+              memory: {{ .Values.resources.extProc.limits.memory | quote }}
+          readinessProbe:
+            tcpSocket:
+              port: {{ .Values.extProc.grpcPort }}
+            initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.readiness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.readiness.failureThreshold }}
+          livenessProbe:
+            tcpSocket:
+              port: {{ .Values.extProc.grpcPort }}
+            initialDelaySeconds: {{ .Values.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.probes.liveness.periodSeconds }}
+            failureThreshold: {{ .Values.probes.liveness.failureThreshold }}

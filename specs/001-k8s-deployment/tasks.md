@@ -17,9 +17,9 @@
 **Purpose**: Create the Helm chart skeleton and project structure.  
 No dependencies — can start immediately.
 
-- [ ] T001 Create Helm chart directory structure: `helm/pii-proxy/Chart.yaml`, `values.yaml`, `templates/`, `templates/tests/`
-- [ ] T002 [P] Author `helm/pii-proxy/Chart.yaml` with name `pii-proxy`, version `0.1.0`, appVersion matching Envoy tag, and description
-- [ ] T003 [P] Author `helm/pii-proxy/templates/_helpers.tpl` with `pii-proxy.fullname`, `pii-proxy.labels`, and `pii-proxy.selectorLabels` named templates
+- [X] T001 Create Helm chart directory structure: `helm/pii-proxy/Chart.yaml`, `values.yaml`, `templates/`, `templates/tests/`
+- [X] T002 [P] Author `helm/pii-proxy/Chart.yaml` with name `pii-proxy`, version `0.1.0`, appVersion matching Envoy tag, and description
+- [X] T003 [P] Author `helm/pii-proxy/templates/_helpers.tpl` with `pii-proxy.fullname`, `pii-proxy.labels`, and `pii-proxy.selectorLabels` named templates
 
 **Checkpoint**: `helm lint helm/pii-proxy` passes (empty chart, no templating errors).
 
@@ -30,9 +30,9 @@ No dependencies — can start immediately.
 **Purpose**: Core chart infrastructure that ALL user story templates depend on.  
 **⚠️ CRITICAL**: Phases 3–6 cannot begin until this phase is complete.
 
-- [ ] T004 Author `helm/pii-proxy/values.yaml` with all fields from `contracts/values-schema.md`: `upstream`, `replicaCount`, `image`, `envoy`, `extProc`, `service`, `resources`, `probes` — sentinel defaults for required fields (`upstream.host`, `image.extProc.repository`) via `required` helper
-- [ ] T005 [P] Author `helm/pii-proxy/templates/configmap-envoy.yaml` — ConfigMap holding rendered `envoy.yaml` with template variables: `{{ .Values.envoy.listenPort }}`, `{{ .Values.upstream.host }}`, `{{ .Values.upstream.port }}`, `127.0.0.1:{{ .Values.extProc.grpcPort }}`; `failure_mode_allow: false` hardcoded (not a value)
-- [ ] T006 [P] Author `helm/pii-proxy/templates/service.yaml` — Service with `spec.type: {{ .Values.service.type }}`, port `{{ .Values.service.port }}` → targetPort `{{ .Values.envoy.listenPort }}`; no port 50051 selector
+- [X] T004 Author `helm/pii-proxy/values.yaml` with all fields from `contracts/values-schema.md`: `upstream`, `replicaCount`, `image`, `envoy`, `extProc`, `service`, `resources`, `probes` — sentinel defaults for required fields (`upstream.host`, `image.extProc.repository`) via `required` helper
+- [X] T005 [P] Author `helm/pii-proxy/templates/configmap-envoy.yaml` — ConfigMap holding rendered `envoy.yaml` with template variables: `{{ .Values.envoy.listenPort }}`, `{{ .Values.upstream.host }}`, `{{ .Values.upstream.port }}`, `127.0.0.1:{{ .Values.extProc.grpcPort }}`; `failure_mode_allow: false` hardcoded (not a value)
+- [X] T006 [P] Author `helm/pii-proxy/templates/service.yaml` — Service with `spec.type: {{ .Values.service.type }}`, port `{{ .Values.service.port }}` → targetPort `{{ .Values.envoy.listenPort }}`; no port 50051 selector
 
 **Checkpoint**: `helm lint helm/pii-proxy` passes; `helm template helm/pii-proxy --set upstream.host=test --set image.extProc.repository=test` renders ConfigMap and Service without errors.
 
@@ -48,17 +48,17 @@ No dependencies — can start immediately.
 
 > **Constitution III (Test-First)**: Write and verify the test template BEFORE the Deployment template.
 
-- [ ] T007 [US1] Author `helm/pii-proxy/templates/tests/test-scrubbing.yaml` — Helm test hook Pod (`helm.sh/hook: test`) that runs `curl -sf -X POST http://{{ include "pii-proxy.fullname" . }}:{{ .Values.service.port }}/ -H "Content-Type: text/plain" -d "My name is Jane Smith and her email is jane@example.com"` and pipes to `grep -q "<PERSON>"` && `grep -q "<EMAIL_ADDRESS>"`; exits non-zero on failure
+- [X] T007 [US1] Author `helm/pii-proxy/templates/tests/test-scrubbing.yaml` — Helm test hook Pod (`helm.sh/hook: test`) that runs `curl -sf -X POST http://{{ include "pii-proxy.fullname" . }}:{{ .Values.service.port }}/ -H "Content-Type: text/plain" -d "My name is Jane Smith and her email is jane@example.com"` and pipes to `grep -q "<PERSON>"` && `grep -q "<EMAIL_ADDRESS>"`; exits non-zero on failure
 
 ### Implementation — User Story 1
 
-- [ ] T008 [US1] Author `helm/pii-proxy/templates/deployment.yaml` — Kubernetes Deployment with `spec.replicas: {{ .Values.replicaCount }}`, two containers:
+- [X] T008 [US1] Author `helm/pii-proxy/templates/deployment.yaml` — Kubernetes Deployment with `spec.replicas: {{ .Values.replicaCount }}`, two containers:
   - **envoy**: image `{{ .Values.image.envoy.repository }}:{{ .Values.image.envoy.tag }}`, port `{{ .Values.envoy.listenPort }}`, volumeMount `/etc/envoy/envoy.yaml` from ConfigMap volume, resources from `{{ .Values.resources.envoy }}`
   - **ext_proc**: image `{{ .Values.image.extProc.repository }}:{{ .Values.image.extProc.tag }}`, port `{{ .Values.extProc.grpcPort }}`, env `GRPC_PORT` and `SPACY_MODEL` from values, resources from `{{ .Values.resources.extProc }}`; NO readiness/liveness probes yet (added in Phase 5)
   - Pod volume mounting EnvoyConfigMap at `/etc/envoy/envoy.yaml`
   - `imagePullPolicy: {{ .Values.image.pullPolicy }}`
-- [ ] T009 [US1] Author `helm/pii-proxy/templates/NOTES.txt` — Post-install message showing the `port-forward` command, prerequisite reminder (set `upstream.host` and `image.extProc.repository`), and minikube `image load` note
-- [ ] T010 [US1] Validate end-to-end on minikube: `minikube start --cpus=4 --memory=8g`, build + load ext_proc image, `helm upgrade --install` with minikube-values.yaml (from quickstart.md), confirm both containers reach `Running`, send test PII request, verify scrubbing response
+- [X] T009 [US1] Author `helm/pii-proxy/templates/NOTES.txt` — Post-install message showing the `port-forward` command, prerequisite reminder (set `upstream.host` and `image.extProc.repository`), and minikube `image load` note
+- [X] T010 [US1] Validate end-to-end on minikube: `minikube start --cpus=4 --memory=8g`, build + load ext_proc image, `helm upgrade --install` with minikube-values.yaml (from quickstart.md), confirm both containers reach `Running`, send test PII request, verify scrubbing response
 
 **Checkpoint**: User Story 1 fully functional. `helm test pii-proxy` passes. Ready for MVP demo.
 
@@ -72,10 +72,10 @@ No dependencies — can start immediately.
 
 ### Implementation — User Story 2
 
-- [ ] T011 [US2] Verify `helm/pii-proxy/values.yaml` fully exposes: `upstream.host`, `upstream.port`, `extProc.spacyModel`, `extProc.grpcPort`, `envoy.listenPort`, `replicaCount`, `image.*`, `service.*`, `resources.*`, `probes.*` — all drawn from `contracts/values-schema.md`; add any missing keys
-- [ ] T012 [P] [US2] Verify `helm/pii-proxy/templates/configmap-envoy.yaml` template variables cover every configurable Envoy field (upstream host, upstream port, listen port, ext_proc address) from research R3; fix any gaps
-- [ ] T013 [P] [US2] Verify `helm/pii-proxy/templates/deployment.yaml` ext_proc container env vars `GRPC_PORT` and `SPACY_MODEL` are templated from values (not hardcoded); fix any gaps
-- [ ] T014 [US2] Validate on minikube: `helm upgrade` with a changed `upstream.host` re-routes traffic; `helm upgrade` with a changed `extProc.spacyModel` causes pod restart with the new env var (`kubectl -n pii-proxy exec ... -- printenv SPACY_MODEL`)
+- [X] T011 [US2] Verify `helm/pii-proxy/values.yaml` fully exposes: `upstream.host`, `upstream.port`, `extProc.spacyModel`, `extProc.grpcPort`, `envoy.listenPort`, `replicaCount`, `image.*`, `service.*`, `resources.*`, `probes.*` — all drawn from `contracts/values-schema.md`; add any missing keys
+- [X] T012 [P] [US2] Verify `helm/pii-proxy/templates/configmap-envoy.yaml` template variables cover every configurable Envoy field (upstream host, upstream port, listen port, ext_proc address) from research R3; fix any gaps
+- [X] T013 [P] [US2] Verify `helm/pii-proxy/templates/deployment.yaml` ext_proc container env vars `GRPC_PORT` and `SPACY_MODEL` are templated from values (not hardcoded); fix any gaps
+- [X] T014 [US2] Validate on minikube: `helm upgrade` with a changed `upstream.host` re-routes traffic; `helm upgrade` with a changed `extProc.spacyModel` causes pod restart with the new env var (`kubectl -n pii-proxy exec ... -- printenv SPACY_MODEL`)
 
 **Checkpoint**: Operator can change any documented value and re-apply without touching templates or rebuilding images.
 
@@ -89,14 +89,14 @@ No dependencies — can start immediately.
 
 ### Implementation — User Story 3
 
-- [ ] T015 [US3] Add `readinessProbe` and `livenessProbe` to ext_proc container in `helm/pii-proxy/templates/deployment.yaml`:
+- [X] T015 [US3] Add `readinessProbe` and `livenessProbe` to ext_proc container in `helm/pii-proxy/templates/deployment.yaml`:
   - `readinessProbe.tcpSocket.port: {{ .Values.extProc.grpcPort }}`
   - `readinessProbe.initialDelaySeconds: {{ .Values.probes.readiness.initialDelaySeconds }}`
   - `readinessProbe.periodSeconds: {{ .Values.probes.readiness.periodSeconds }}`
   - `readinessProbe.failureThreshold: {{ .Values.probes.readiness.failureThreshold }}`
   - `livenessProbe.tcpSocket.port`, `initialDelaySeconds`, `periodSeconds`, `failureThreshold` from `probes.liveness.*`
   - Defaults per data-model.md: readiness delay 180 s / period 15 s / threshold 10; liveness delay 300 s / period 30 s / threshold 3
-- [ ] T016 [US3] Validate on minikube: fresh deploy → observe `NotReady` during load, `Ready` after; `kubectl -n pii-proxy exec <pod> -c ext-proc -- kill 1` → pod restarts automatically within 30 s
+- [X] T016 [US3] Validate on minikube: fresh deploy → observe `NotReady` during load, `Ready` after; `kubectl -n pii-proxy exec <pod> -c ext-proc -- kill 1` → pod restarts automatically within 30 s
 
 **Checkpoint**: Pod lifecycle is fully Kubernetes-managed. Zero requests flow while pod is `NotReady`.
 
@@ -110,8 +110,8 @@ No dependencies — can start immediately.
 
 ### Implementation — User Story 4
 
-- [ ] T017 [US4] Confirm `helm/pii-proxy/templates/deployment.yaml` uses `spec.replicas: {{ .Values.replicaCount }}` (should already be present from T008); update `values.yaml` default comment to indicate single-replica is the default and scaling is via this value
-- [ ] T018 [US4] Validate on minikube: `helm upgrade pii-proxy helm/pii-proxy --set replicaCount=2 ...`; wait for both pods `Ready`; send 20 requests via `port-forward`; verify both pod logs contain processed-request entries
+- [X] T017 [US4] Confirm `helm/pii-proxy/templates/deployment.yaml` uses `spec.replicas: {{ .Values.replicaCount }}` (should already be present from T008); update `values.yaml` default comment to indicate single-replica is the default and scaling is via this value
+- [X] T018 [US4] Validate on minikube: `helm upgrade pii-proxy helm/pii-proxy --set replicaCount=2 ...`; wait for both pods `Ready`; send 20 requests via `port-forward`; verify both pod logs contain processed-request entries
 
 **Checkpoint**: Horizontal scaling works. Each replica serves requests independently.
 
@@ -121,15 +121,15 @@ No dependencies — can start immediately.
 
 **Purpose**: Documentation, `helm lint` validation, optional LoadBalancer service, and idempotency verification.
 
-- [ ] T019 [P] Author `helm/pii-proxy/README.md` covering all requirements from FR-009:
+- [X] T019 [P] Author `helm/pii-proxy/README.md` covering all requirements from FR-009:
   - (a) Minimum prerequisites: `helm` 3.x, `kubectl` 1.27+, OCI registry access (or minikube for local)
   - (b) How to build and push ext_proc image: `docker build` + `docker push` commands
   - (c) All `values.yaml` fields with types, defaults, and descriptions (reference `contracts/values-schema.md`)
   - (d) The deploy command: `helm upgrade --install pii-proxy helm/pii-proxy -f my-values.yaml`
   - (e) minikube quick-start section (from quickstart.md)
-- [ ] T020 [P] Verify optional `LoadBalancer` Service: confirm `helm/pii-proxy/templates/service.yaml` renders correctly with `service.type: LoadBalancer`; add comment in `values.yaml` noting bare-metal clusters require MetalLB (FR-010)
-- [ ] T021 [P] Run `helm lint helm/pii-proxy` and fix any warnings or errors
-- [ ] T022 Verify idempotency (FR-007, SC-003): run `helm upgrade --install` twice in succession on minikube; confirm no errors and no unintended state changes on the second run; `helm test` passes both times
+- [X] T020 [P] Verify optional `LoadBalancer` Service: confirm `helm/pii-proxy/templates/service.yaml` renders correctly with `service.type: LoadBalancer`; add comment in `values.yaml` noting bare-metal clusters require MetalLB (FR-010)
+- [X] T021 [P] Run `helm lint helm/pii-proxy` and fix any warnings or errors
+- [X] T022 Verify idempotency (FR-007, SC-003): run `helm upgrade --install` twice in succession on minikube; confirm no errors and no unintended state changes on the second run; `helm test` passes both times
 
 **Checkpoint**: Chart is lint-clean, documented, idempotent, and all 4 user stories are functional.
 

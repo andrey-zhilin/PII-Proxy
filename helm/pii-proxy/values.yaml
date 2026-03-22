@@ -1,0 +1,91 @@
+# ============================================================
+# PII Proxy Helm Chart — Default Values
+# Override with: helm upgrade --install pii-proxy helm/pii-proxy -f my-values.yaml
+# See helm/pii-proxy/README.md for full documentation.
+# ============================================================
+
+# Number of Envoy + ext_proc Pod replicas.
+# Envoy and ext_proc scale together as a unit (sidecar pattern).
+replicaCount: 1
+
+# ── Container images ──────────────────────────────────────────
+image:
+  envoy:
+    repository: envoyproxy/envoy
+    tag: "v1.33.0"
+  extProc:
+    # REQUIRED — must be overridden with your OCI registry image reference.
+    # Example: my-registry.example.com/pii-proxy/ext-proc
+    repository: ""
+    tag: "latest"
+  # Use "Never" when images are loaded via `minikube image load` (local testing).
+  # Use "IfNotPresent" for standard registry-based deployments.
+  pullPolicy: IfNotPresent
+
+# ── Upstream service ─────────────────────────────────────────
+upstream:
+  # REQUIRED — hostname of the upstream HTTP service Envoy proxies to.
+  # Can be a Kubernetes Service DNS name (e.g. my-svc.default.svc.cluster.local)
+  # or a plain hostname. Leave empty to trigger `helm required` validation error.
+  host: ""
+  port: 80
+
+# ── Envoy configuration ───────────────────────────────────────
+envoy:
+  # Container port that Envoy's HTTP listener binds to.
+  listenPort: 8080
+
+# ── ext_proc sidecar configuration ──────────────────────────
+extProc:
+  # gRPC port for Envoy→ext_proc communication.
+  # Pod-local only — NEVER exposed outside the pod.
+  grpcPort: 50051
+  # spaCy model name passed as the SPACY_MODEL environment variable.
+  # The model must be baked into the container image at build time.
+  spacyModel: en_core_web_lg
+
+# ── Kubernetes Service ────────────────────────────────────────
+service:
+  # "ClusterIP"   — in-cluster access only (default)
+  # "LoadBalancer" — external access via cloud LB (AWS ELB, GCP GCLB, Azure LB)
+  #                  On bare-metal clusters, MetalLB must be pre-installed.
+  type: ClusterIP
+  # Port exposed by the Service (maps to envoy.listenPort inside the pod).
+  port: 80
+
+# ── Resource requests and limits ─────────────────────────────
+# ext_proc memory is sized for en_core_web_lg (~1.5-2 GB resident during model load).
+# Do NOT reduce limits.memory below 2Gi — OOMKill during spaCy model loading likely.
+resources:
+  extProc:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "2000m"
+      memory: "4Gi"
+  envoy:
+    requests:
+      cpu: "100m"
+      memory: "128Mi"
+    limits:
+      cpu: "1000m"
+      memory: "512Mi"
+
+# ── Health probes ─────────────────────────────────────────────
+# All probes use TCP socket on extProc.grpcPort.
+# The gRPC port opens ONLY after PiiScrubber.__init__() completes (spaCy model load).
+# Therefore: port open ⟺ model ready. See research.md R1 for full rationale.
+probes:
+  readiness:
+    # Seconds to wait before the first readiness check.
+    # spaCy en_core_web_lg takes 2-3 minutes to load.
+    initialDelaySeconds: 180
+    periodSeconds: 15
+    # Allow up to 2.5 additional min past initialDelay before marking NotReady.
+    failureThreshold: 10
+  liveness:
+    # Only start liveness checks after the model has had time to load.
+    initialDelaySeconds: 300
+    periodSeconds: 30
+    failureThreshold: 3
