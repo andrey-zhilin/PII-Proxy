@@ -8,6 +8,11 @@
 # Envoy and ext_proc scale together as a unit (sidecar pattern).
 replicaCount: 1
 
+# ── Proxy operating mode ──────────────────────────────────────
+# "reverse-proxy"   — scrub response bodies (existing behavior, spec 001)
+# "outgoing-proxy"  — scrub request bodies and forward to external upstream
+mode: "reverse-proxy"
+
 # ── Container images ──────────────────────────────────────────
 image:
   envoy:
@@ -22,18 +27,43 @@ image:
   # Use "IfNotPresent" for standard registry-based deployments.
   pullPolicy: IfNotPresent
 
-# ── Upstream service ─────────────────────────────────────────
+# ── Upstream service (reverse-proxy mode) ────────────────────
 upstream:
-  # REQUIRED — hostname of the upstream HTTP service Envoy proxies to.
-  # Can be a Kubernetes Service DNS name (e.g. my-svc.default.svc.cluster.local)
-  # or a plain hostname. Leave empty to trigger `helm required` validation error.
+  # REQUIRED in reverse-proxy mode — hostname of the upstream HTTP service
+  # Envoy proxies to. Can be a Kubernetes Service DNS name
+  # (e.g. my-svc.default.svc.cluster.local) or a plain hostname.
   host: ""
   port: 80
+
+# ── Langfuse upstream (outgoing-proxy mode) ───────────────────
+langfuse:
+  # REQUIRED in outgoing-proxy mode — external Langfuse FQDN
+  # (e.g. cloud.langfuse.com or mock-langfuse.langfuse-mock.svc.cluster.local)
+  host: ""
+  port: 443
+  tls:
+    # Whether Envoy uses TLS when connecting to Langfuse.
+    # Set to false when targeting the local mock server over HTTP.
+    enabled: true
+
+# ── TLS listener (HTTPS inbound) ─────────────────────────────
+tls:
+  # Enable HTTPS listener on Envoy (terminates TLS from calling application).
+  enabled: false
+  # Name of a kubernetes.io/tls Secret containing tls.crt and tls.key.
+  secretName: ""
+
+# ── Istio integration ─────────────────────────────────────────
+istio:
+  # Render ServiceEntry + DestinationRule and add port-exclusion annotations.
+  enabled: false
 
 # ── Envoy configuration ───────────────────────────────────────
 envoy:
   # Container port that Envoy's HTTP listener binds to.
   listenPort: 8080
+  # Container port for the HTTPS listener (active when tls.enabled=true).
+  httpsPort: 443
 
 # ── ext_proc sidecar configuration ──────────────────────────
 extProc:
@@ -52,6 +82,8 @@ service:
   type: ClusterIP
   # Port exposed by the Service (maps to envoy.listenPort inside the pod).
   port: 80
+  # HTTPS port exposed by the Service (active when tls.enabled=true).
+  httpsPort: 443
 
 # ── Resource requests and limits ─────────────────────────────
 # ext_proc memory is sized for en_core_web_lg (~1.5-2 GB resident during model load).

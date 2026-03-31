@@ -1,0 +1,31 @@
+{{- if .Values.istio.enabled }}
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: {{ include "pii-proxy.fullname" . }}-langfuse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pii-proxy.labels" . | nindent 4 }}
+spec:
+  hosts:
+    - {{ .Values.langfuse.host | quote }}
+  ports:
+    - number: {{ .Values.langfuse.port }}
+      name: {{ if .Values.langfuse.tls.enabled }}https{{ else }}http{{ end }}
+      protocol: {{ if .Values.langfuse.tls.enabled }}HTTPS{{ else }}HTTP{{ end }}
+  location: MESH_EXTERNAL
+  resolution: DNS
+---
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ include "pii-proxy.fullname" . }}-langfuse
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "pii-proxy.labels" . | nindent 4 }}
+spec:
+  host: {{ .Values.langfuse.host | quote }}
+  trafficPolicy:
+    tls:
+      mode: DISABLE
+{{- end }}

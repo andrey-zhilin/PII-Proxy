@@ -10,9 +10,19 @@ data:
       listeners:
         - name: listener_0
           address:
-            socket_address: { address: 0.0.0.0, port_value: {{ .Values.envoy.listenPort }} }
+            socket_address: { address: 0.0.0.0, port_value: {{ if .Values.tls.enabled }}{{ .Values.envoy.httpsPort }}{{ else }}{{ .Values.envoy.listenPort }}{{ end }} }
           filter_chains:
-            - filters:
+            - {{- if .Values.tls.enabled }}
+              transport_socket:
+                name: envoy.transport_sockets.tls
+                typed_config:
+                  "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.DownstreamTlsContext
+                  common_tls_context:
+                    tls_certificates:
+                      - certificate_chain: { filename: "/certs/tls.crt" }
+                        private_key: { filename: "/certs/tls.key" }
+              {{- end }}
+              filters:
                 - name: envoy.filters.network.http_connection_manager
                   typed_config:
                     "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
@@ -26,7 +36,12 @@ data:
                           routes:
                             - match: { prefix: "/" }
                               route:
+                                {{- if eq .Values.mode "outgoing-proxy" }}
+                                cluster: langfuse_upstream
+                                host_rewrite_literal: {{ required "langfuse.host is required in outgoing-proxy mode." .Values.langfuse.host }}
+                                {{- else }}
                                 cluster: downstream_service
+                                {{- end }}
                     http_filters:
                       - name: envoy.filters.http.ext_proc
                         typed_config:
@@ -36,13 +51,24 @@ data:
                               cluster_name: ext_proc_cluster
                           # Privacy-First (constitution Principle I):
                           # MUST remain false — Envoy returns 5xx on scrub failure,
-                          # never forwards unredacted PII to the client.
+                          # never forwards unredacted PII to the upstream.
                           failure_mode_allow: false
                           processing_mode:
+                            {{- if eq .Values.mode "outgoing-proxy" }}
+                            request_header_mode: SEND
+                            response_header_mode: SKIP
+                            request_body_mode: BUFFERED
+                            response_body_mode: NONE
+                            {{- else }}
                             request_header_mode: SKIP
                             response_header_mode: SKIP
                             request_body_mode: NONE
                             response_body_mode: BUFFERED
+                            {{- end }}
+                          {{- if eq .Values.mode "outgoing-proxy" }}
+                          max_message_timeout: 10s
+                          message_timeout: 10s
+                          {{- end }}
                       - name: envoy.filters.http.router
                         typed_config:
                           "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
@@ -66,6 +92,32 @@ data:
                           # Always localhost — gRPC is pod-local, never exposed outside the pod.
                           address: 127.0.0.1
                           port_value: {{ .Values.extProc.grpcPort }}
+        {{- if eq .Values.mode "outgoing-proxy" }}
+        - name: langfuse_upstream
+          connect_timeout: 5s
+          type: LOGICAL_DNS
+          lb_policy: ROUND_ROBIN
+          {{- if .Values.langfuse.tls.enabled }}
+          transport_socket:
+            name: envoy.transport_sockets.tls
+            typed_config:
+              "@type": type.googleapis.com/envoy.extensions.transport_sockets.tls.v3.UpstreamTlsContext
+              sni: {{ .Values.langfuse.host }}
+              common_tls_context:
+                validation_context:
+                  trusted_ca:
+                    filename: /etc/ssl/certs/ca-certificates.crt
+          {{- end }}
+          load_assignment:
+            cluster_name: langfuse_upstream
+            endpoints:
+              - lb_endpoints:
+                  - endpoint:
+                      address:
+                        socket_address:
+                          address: {{ .Values.langfuse.host }}
+                          port_value: {{ .Values.langfuse.port }}
+        {{- else }}
         - name: downstream_service
           connect_timeout: 0.25s
           type: LOGICAL_DNS
@@ -77,5 +129,6 @@ data:
                   - endpoint:
                       address:
                         socket_address:
-                          address: {{ required "upstream.host is required. Set it to your upstream service hostname." .Values.upstream.host }}
+                          address: {{ required "upstream.host is required in reverse-proxy mode. Set it to your upstream service hostname." .Values.upstream.host }}
                           port_value: {{ .Values.upstream.port }}
+        {{- end }}

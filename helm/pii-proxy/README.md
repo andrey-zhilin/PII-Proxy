@@ -1,10 +1,13 @@
 # PII Proxy — Helm Chart
 
-Deploys the PII Proxy stack to a Kubernetes cluster: an **Envoy** reverse proxy paired
-with an **ext_proc** PII-scrubbing sidecar in a single Pod. All HTTP response bodies
-routed through Envoy are automatically scanned by a Presidio + spaCy NLP pipeline and
-PII entities are replaced with safe placeholder tokens (`<PERSON>`, `<EMAIL_ADDRESS>`,
-etc.) before reaching the client.
+Deploys the PII Proxy stack to a Kubernetes cluster: an **Envoy** proxy paired
+with an **ext_proc** PII-scrubbing sidecar in a single Pod. The chart supports two modes:
+
+- **Reverse Proxy** (`mode: reverse-proxy`): Scrubs PII from **response** bodies before they reach the client. Default mode.
+- **Outgoing Proxy** (`mode: outgoing-proxy`): Scrubs PII from **request** bodies before forwarding to an external Langfuse endpoint. Used when applications inside the mesh send LLM traces through the proxy.
+
+All HTTP bodies routed through Envoy are automatically scanned by a Presidio + spaCy NLP pipeline and
+PII entities are replaced with safe placeholder tokens (`<PERSON>`, `<EMAIL_ADDRESS>`, etc.).
 
 ---
 
@@ -132,6 +135,69 @@ helm upgrade --install pii-proxy helm/pii-proxy \
 
 ---
 
+## Outgoing Proxy Mode (Langfuse)
+
+To deploy as an outgoing proxy for Langfuse traffic:
+
+### Required Values
+
+```yaml
+# langfuse-values.yaml
+mode: outgoing-proxy
+
+langfuse:
+  host: "cloud.langfuse.com"   # Your Langfuse endpoint
+  port: 443
+  tls:
+    enabled: true               # TLS to upstream Langfuse
+
+tls:
+  enabled: true                 # TLS listener (HTTPS inbound)
+  secretName: "pii-proxy-tls"  # kubernetes.io/tls Secret
+
+istio:
+  enabled: true                 # Creates ServiceEntry + DestinationRule
+
+image:
+  extProc:
+    repository: "my-registry.example.com/pii-proxy/ext-proc"
+    tag: "1.0.0"
+```
+
+### Deploy
+
+```bash
+helm upgrade --install pii-proxy helm/pii-proxy \
+  --namespace pii-proxy --create-namespace \
+  -f langfuse-values.yaml
+```
+
+### Application Configuration
+
+Point the Langfuse SDK to the proxy instead of Langfuse directly:
+
+```python
+# Before: LANGFUSE_HOST=https://cloud.langfuse.com
+# After:
+LANGFUSE_HOST=https://pii-proxy.pii-proxy.svc.cluster.local:443
+```
+
+Applications must trust the proxy's TLS certificate (via `SSL_CERT_FILE` or system CA store).
+
+### How It Works
+
+1. Application sends Langfuse trace to the proxy (HTTPS)
+2. Envoy receives the request and streams headers + body to ext_proc
+3. ext_proc scrubs PII from the request body (names, emails, phones, addresses)
+4. Envoy forwards the scrubbed request to the real Langfuse endpoint
+5. Langfuse response is relayed back unchanged (acknowledgement only)
+
+### Quickstart
+
+See [specs/002-langfuse-outgoing-proxy/quickstart.md](../../specs/002-langfuse-outgoing-proxy/quickstart.md) for the full end-to-end setup guide with minikube, Istio, TLS, and security audit steps.
+
+---
+
 ## Configuration Reference
 
 All configurable fields in `values.yaml`:
@@ -146,12 +212,39 @@ All configurable fields in `values.yaml`:
 | `image.extProc.tag` | string | `latest` | No | ext_proc tag |
 | `image.pullPolicy` | string | `IfNotPresent` | No | K8s `imagePullPolicy`. Use `Never` with minikube `image load`. |
 
-### `upstream` — Backend routing
+### `upstream` — Backend routing (reverse-proxy mode)
 
 | Key | Type | Default | Required | Description |
 |-----|------|---------|----------|-------------|
-| `upstream.host` | string | — | **YES** | Upstream service hostname. Helm fails if empty. |
+| `upstream.host` | string | — | **YES** (reverse mode) | Upstream service hostname. Helm fails if empty in reverse-proxy mode. |
 | `upstream.port` | int | `80` | No | Upstream TCP port |
+
+### `mode` — Proxy mode
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `mode` | string | `reverse-proxy` | `reverse-proxy` (scrub responses) or `outgoing-proxy` (scrub requests to Langfuse) |
+
+### `langfuse` — Langfuse endpoint (outgoing-proxy mode)
+
+| Key | Type | Default | Required | Description |
+|-----|------|---------|----------|-------------|
+| `langfuse.host` | string | — | **YES** (outgoing mode) | Langfuse server hostname |
+| `langfuse.port` | int | `443` | No | Langfuse server port |
+| `langfuse.tls.enabled` | bool | `true` | No | Enable TLS to upstream Langfuse (UpstreamTlsContext) |
+
+### `tls` — TLS listener
+
+| Key | Type | Default | Required | Description |
+|-----|------|---------|----------|-------------|
+| `tls.enabled` | bool | `false` | No | Enable HTTPS listener (DownstreamTlsContext) |
+| `tls.secretName` | string | — | **YES** (when `tls.enabled`) | Name of `kubernetes.io/tls` Secret with cert + key |
+
+### `istio` — Istio mesh integration
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `istio.enabled` | bool | `false` | Create ServiceEntry + DestinationRule for Langfuse egress |
 
 ### `replicaCount`
 

@@ -1,19 +1,23 @@
 <!--
 SYNC IMPACT REPORT
 ==================
-Version change:        N/A → 1.0.0 (initial ratification)
-Modified principles:   N/A (first version)
-Added sections:        Core Principles, Security Requirements,
-                       Development Workflow, Governance
-Removed sections:      N/A
+Version change:        1.0.0 → 1.1.0 (MINOR — materially expanded guidance)
+Modified principles:   I. Privacy-First (outgoing-proxy operation mode added)
+                       IV. Simplicity & Focused Scope (ratified exception added)
+Added sections:        "Ratified Feature Exceptions" subsection under §IV
+Removed sections:      None
 Templates reviewed:
-  ✅ .specify/templates/plan-template.md   — Constitution Check section is
-     already generic; no project-specific text to remove.
+  ✅ .specify/templates/plan-template.md   — Constitution Check rows are
+     generic placeholders; no changes needed.
   ✅ .specify/templates/spec-template.md   — No constitution references;
      no changes needed.
   ✅ .specify/templates/tasks-template.md  — No constitution references;
      no changes needed.
 Deferred TODOs:        None
+Bump rationale:        Two existing principles received materially expanded
+                       guidance (new mode clause in §I, formal ratification
+                       block in §IV). Content is additive — no removal or
+                       redefinition — therefore MINOR, not MAJOR.
 -->
 
 # PII Proxy Constitution
@@ -22,20 +26,41 @@ Deferred TODOs:        None
 
 ### I. Privacy-First (NON-NEGOTIABLE)
 
-Every HTTP response body that passes through the proxy MUST be scrubbed of all
-detectable PII before the response reaches the client. No PII entity (person
-name, e-mail address, phone number, credit card number, etc.) MUST ever be
-forwarded to a client in unredacted form.
+No PII entity (person name, e-mail address, phone number, credit card number,
+etc.) MUST ever leave the proxy boundary in unredacted form, whether flowing
+toward a downstream client or toward an external upstream service.
+
+The proxy operates in one of two modes. The scrubbing obligation applies in
+both; only the body direction differs:
+
+**Reverse-proxy mode** (default): Every HTTP *response* body received from the
+upstream service MUST be scrubbed before it is forwarded to the calling client.
 
 - Scrubbing MUST happen on every response regardless of Content-Type or status
   code, unless the response body is empty.
 - Both plain-text and JSON bodies MUST be supported; JSON fields MUST be walked
   recursively and each string value scrubbed individually.
-- Failure to scrub (e.g., Presidio/spaCy timeout or error) MUST result in the
-  request being rejected or the body being withheld — never forwarded raw.
+
+**Outgoing-proxy mode** (e.g., Langfuse telemetry forwarding): Every HTTP
+*request* body originating from an internal application MUST be scrubbed before
+it is forwarded to the external upstream service. Response bodies returned by
+the external upstream (e.g., acknowledgement payloads containing trace IDs and
+status codes) contain no user-submitted content and are relayed unchanged.
+
+- Scrubbing MUST happen on every outgoing request body regardless of
+  Content-Type, unless the body is empty.
+- Both plain-text and JSON bodies MUST be supported; JSON fields MUST be walked
+  recursively and each string value scrubbed individually.
+
+**Applies to both modes**: Failure to scrub (e.g., Presidio/spaCy timeout or
+error) MUST result in the transaction being rejected — never forwarded raw.
+`failure_mode_allow: false` MUST be hardcoded; it MUST NOT be a configurable
+value.
 
 **Rationale**: PII Proxy's sole reason for existence is privacy protection.
-Allowing PII to leak, even partially, defeats the product entirely.
+Allowing PII to leak, even partially, defeats the product entirely. The
+two-mode design extends this guarantee to outbound LLM telemetry (prompts,
+completions) that would otherwise leave the cluster unredacted.
 
 ### II. Transparently Invisible
 
@@ -69,18 +94,34 @@ subtle and dangerous. Only test-driven coverage provides adequate confidence.
 ### IV. Simplicity & Focused Scope (YAGNI)
 
 The ext_proc sidecar MUST do exactly one thing: detect and redact PII from
-response bodies. No feature outside that scope MUST be added without explicit
-justification and a constitution amendment.
+HTTP bodies at the appropriate interception point for the active operating mode.
+No feature outside that scope MUST be added without explicit justification and
+a constitution amendment.
 
-- Request bodies and request/response headers MUST NOT be modified unless a
-  specific privacy requirement demands it and is ratified.
+- Request/response headers MUST NOT be modified for any reason.
+- Request bodies MUST NOT be modified except to redact PII, and only when
+  operating in outgoing-proxy mode (see Ratified Feature Exceptions below).
 - No business logic, routing decisions, or data transformation beyond PII
   replacement MUST be performed by the sidecar.
 - Code complexity MUST be justified. Any abstraction that serves only a
   hypothetical future requirement MUST be rejected.
 
+#### Ratified Feature Exceptions
+
+The following request-body modifications have been formally ratified. Each
+entry MUST cite the originating feature branch and the privacy requirement that
+demands the modification.
+
+| # | Feature Branch | Scope | Rationale |
+|---|---------------|-------|-----------|
+| 1 | `002-langfuse-outgoing-proxy` | PII redaction of outgoing HTTP request bodies in `outgoing-proxy` mode only | LLM applications send prompts and user inputs to Langfuse as request payloads. These payloads may contain PII (names, emails, phone numbers). Scrubbing must occur before the payload leaves the cluster. No other request body modification is performed. |
+
+To add a new ratified exception: amend this table in a PR that also bumps the
+constitution version and passes the consistency propagation checklist.
+
 **Rationale**: Keeping the sidecar laser-focused safeguards correctness,
-reduces attack surface, and keeps the mental model simple.
+reduces attack surface, and keeps the mental model simple. Explicit ratification
+of each exception ensures deviations are intentional, documented, and auditable.
 
 ### V. Containerized & Reproducible
 
@@ -146,4 +187,4 @@ favor of this constitution.
 **Compliance review**: All PRs and code reviews MUST verify adherence to the
 five core principles. Violations MUST be flagged as blocking before merge.
 
-**Version**: 1.0.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-03-21
+**Version**: 1.1.0 | **Ratified**: 2026-03-21 | **Last Amended**: 2026-03-30

@@ -13,3 +13,9 @@ spec:
       protocol: TCP
       port: {{ .Values.service.port }}
       targetPort: {{ .Values.envoy.listenPort }}
+    {{- if .Values.tls.enabled }}
+    - name: https
+      protocol: TCP
+      port: {{ .Values.service.httpsPort }}
+      targetPort: {{ .Values.envoy.httpsPort }}
+    {{- end }}
